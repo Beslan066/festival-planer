@@ -1,0 +1,65 @@
+.schedule-selection {
+    margin-bottom: 20px;
+}
+
+.schedule-option {
+    border: 2px solid #e9ecef;
+    padding: 15px;
+    margin: 10px 0;
+    border-radius: 8px;
+    transition: all 0.3s ease;
+}
+
+.schedule-option:hover {
+    border-color: #007bff;
+    background-color: #f8f9fa;
+}
+
+.schedule-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.select-btn {
+    background: #28a745;
+    color: white;
+    padding: 8px 15px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+.select-btn:hover {
+    background: #218838;
+}
+
+.time-slot.selected {
+    background: #d4edda;
+    border-left-color: #28a745;
+}
+
+.time-slot.saved {
+    background: #e7f3ff;
+    border-left-color: #007bff;
+}
+
+.selection-actions {
+    margin-top: 15px;
+    display: flex;
+    gap: 10px;
+}
+
+.saved-item {
+    border: 1px solid #ddd;
+    padding: 15px;
+    margin: 10px 0;
+    border-radius: 5px;
+    background: white;
+}
+
+.schedule-meta {
+    color: #666;
+    margin: 5px 0;
+}
