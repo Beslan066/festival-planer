@@ -500,4 +500,21 @@ class ScheduleController extends Controller
             ], 500);
         }
     }
+
+    public function clearGroupSelection(Request $request)
+    {
+        try {
+            Session::forget('group_selections');
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Выборы участников группы очищены!'
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Ошибка очистки: ' . $e->getMessage()
+            ], 500);
+        }
+    }
 }

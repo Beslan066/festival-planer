@@ -26,6 +26,7 @@ Route::post('/schedules/adjust', [ScheduleController::class, 'adjust'])->name('s
 // Групповое планирование
 Route::post('/group/save', [ScheduleController::class, 'saveGroupSelection'])->name('group.save');
 Route::post('/group/merge', [ScheduleController::class, 'mergeGroupSelections'])->name('group.merge');
+Route::post('/group/clear', [ScheduleController::class, 'clearGroupSelection'])->name('group.clear');
 
 Route::delete('/schedules/delete-multiple', [ScheduleController::class, 'deleteMultiple'])->name('schedules.delete-multiple');
 Route::get('/schedules/saved', [ScheduleController::class, 'getSavedSchedules'])->name('schedules.saved');
