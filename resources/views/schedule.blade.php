@@ -173,6 +173,13 @@
 
         <div id="savedSchedulesSection" style="display: none;">
             <h3>Мои сохраненные расписания и списки</h3>
+
+            <!-- Добавьте кнопки массового управления -->
+            <div class="bulk-actions" id="bulkActions" style="display: none;">
+                <button onclick="selectAllSchedules()" class="select-all-btn">Выбрать все</button>
+                <button onclick="deselectAllSchedules()" class="deselect-all-btn">Снять выбор</button>
+            </div>
+
             <div id="savedSchedulesList"></div>
         </div>
     </div>
@@ -182,8 +189,50 @@
     let currentScenario = 1;
     let selectedScheduleIndex = null;
     let availableSchedules = [];
+    let selectedSchedules = new Set();
 
-    // Добавим функцию для обработки ошибок JSON
+
+    // Добавьте эту функцию в начало скрипта
+    async function initializePage() {
+        try {
+            // Загружаем текущее состояние из сессии
+            const response = await fetch('/events/current-state');
+            const data = await handleResponse(response);
+
+            if (data.success) {
+                // Обновляем UI в соответствии с данными из сессии
+                updateUIFromSession(data);
+            }
+        } catch (error) {
+            console.error('Error initializing page:', error);
+        }
+    }
+
+    // Функция для обновления UI на основе данных сессии
+    function updateUIFromSession(data) {
+        // Обновляем выбранные события
+        const selectedEvents = data.selected_events || [];
+        document.querySelectorAll('.event-item').forEach(item => {
+            const eventId = parseInt(item.querySelector('input').id.replace('event-', ''));
+            const isSelected = selectedEvents.includes(eventId);
+            item.classList.toggle('selected', isSelected);
+            item.querySelector('input').checked = isSelected;
+        });
+
+        document.getElementById('selectedCount').textContent = selectedEvents.length;
+        updateStats();
+
+        // Обновляем отображение расписания
+        const currentSchedule = data.current_schedule || [];
+        if (currentSchedule.length > 0 && currentSchedule[0].length > 0) {
+            displaySingleSchedule(currentSchedule[0]);
+        } else {
+            document.getElementById('schedulesList').innerHTML = '<p>Сгенерируйте расписания, чтобы увидеть варианты</p>';
+        }
+    }
+
+
+    //  Функция для обработки ошибок JSON
     async function handleResponse(response) {
         const contentType = response.headers.get('content-type');
         if (!contentType || !contentType.includes('application/json')) {
@@ -454,38 +503,54 @@
     }
 
     async function loadSavedSchedules() {
-        const response = await fetch('/schedules');
-        const schedules = await response.json();
+        try {
+            const response = await fetch('/schedules/saved');
+            const schedules = await handleResponse(response);
 
-        const savedSection = document.getElementById('savedSchedulesSection');
-        const savedList = document.getElementById('savedSchedulesList');
+            const savedSection = document.getElementById('savedSchedulesSection');
+            const savedList = document.getElementById('savedSchedulesList');
 
-        if (schedules.length === 0) {
-            savedList.innerHTML = '<p>Нет сохраненных расписаний.</p>';
-        } else {
-            let html = '';
-            schedules.forEach(schedule => {
-                const scheduleType = schedule.type === 'list' ? '📋 Список' : '⏰ Расписание';
-                const eventsCount = schedule.selected_events ? schedule.selected_events.length : 0;
+            if (!schedules || schedules.length === 0) {
+                savedList.innerHTML = '<p>Нет сохраненных расписаний.</p>';
+                // Скрываем кнопку удаления, если нет расписаний
+                const deleteBtn = document.getElementById('deleteSelectedBtn');
+                if (deleteBtn) {
+                    deleteBtn.style.display = 'none';
+                }
+            }else {
+                let html = `
+        <div class="schedules-management">
+            <div class="management-header">
+                <h4>Управление сохраненными расписаниями</h4>
+                <button id="deleteSelectedBtn" onclick="deleteSelectedSchedules()" class="delete-btn" style="display: none;">
+                    Удалить выбранные
+                </button>
+            </div>
+            <div class="schedules-list">
+    `;
+
+                // ... остальной код генерации расписаний
 
                 html += `
-                    <div class="saved-item">
-                        <h4>${scheduleType}: ${schedule.name}</h4>
-                        <p class="schedule-meta">
-                            <small>Создано: ${new Date(schedule.created_at).toLocaleString()}</small><br>
-                            <small>Событий: ${eventsCount}</small>
-                        </p>
-                        <div class="schedule-actions">
-                            <button onclick="loadSchedule(${schedule.id})">Загрузить</button>
-                            <button onclick="deleteSchedule(${schedule.id})" class="delete-btn">Удалить</button>
-                        </div>
-                    </div>
-                `;
-            });
-            savedList.innerHTML = html;
-        }
+            </div>
+        </div>
+    `;
+                savedList.innerHTML = html;
 
-        savedSection.style.display = 'block';
+                // Показываем bulkActions если есть расписания
+                const bulkActions = document.getElementById('bulkActions');
+                if (bulkActions) {
+                    bulkActions.style.display = 'block';
+                }
+
+                updateDeleteButton();
+            }
+
+            savedSection.style.display = 'block';
+        } catch (error) {
+            console.error('Error:', error);
+            alert('Ошибка загрузки сохраненных расписаний: ' + error.message);
+        }
     }
 
     async function loadSchedule(scheduleId) {
@@ -630,11 +695,13 @@
     async function clearSelection() {
         if (confirm('Очистить все выбранные события?')) {
             try {
+                // Сначала очищаем UI
                 document.querySelectorAll('.event-item input[type="checkbox"]').forEach(checkbox => {
                     checkbox.checked = false;
                     checkbox.parentElement.classList.remove('selected');
                 });
 
+                // Затем очищаем серверную сессию
                 const response = await fetch('/events/clear', {
                     method: 'POST',
                     headers: {
@@ -645,13 +712,16 @@
 
                 const data = await handleResponse(response);
 
-                document.getElementById('selectedCount').textContent = '0';
-                updateStats();
-
-                // Очищаем отображение расписаний
-                document.getElementById('schedulesList').innerHTML = '<p>Сгенерируйте расписания, чтобы увидеть варианты</p>';
-
                 if (data.success) {
+                    document.getElementById('selectedCount').textContent = '0';
+                    updateStats();
+
+                    // Полностью очищаем отображение расписаний
+                    document.getElementById('schedulesList').innerHTML = '<p>Сгенерируйте расписания, чтобы увидеть варианты</p>';
+
+                    // Очищаем текущее расписание в сессии
+                    await clearCurrentSchedule();
+
                     console.log('Selection cleared successfully');
                 }
             } catch (error) {
@@ -661,10 +731,161 @@
         }
     }
 
+    // Функция для выбора/снятия выбора расписания
+    function toggleScheduleSelection(scheduleId) {
+        if (selectedSchedules.has(scheduleId)) {
+            selectedSchedules.delete(scheduleId);
+        } else {
+            selectedSchedules.add(scheduleId);
+        }
+
+        // Обновляем визуальное состояние (с проверкой существования элемента)
+        const scheduleElement = document.getElementById(`schedule-${scheduleId}`);
+        if (scheduleElement) {
+            scheduleElement.classList.toggle('selected', selectedSchedules.has(scheduleId));
+        }
+
+        updateDeleteButton();
+    }
+
+
+    // Функция для очистки текущего расписания в сессии
+    async function clearCurrentSchedule() {
+        try {
+            const response = await fetch('/schedules/clear-current', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                }
+            });
+            // Не обрабатываем ошибку специально, так как это дополнительная операция
+        } catch (error) {
+            console.error('Error clearing current schedule:', error);
+        }
+    }
+
+    // Обновление состояния кнопки удаления
+    function updateDeleteButton() {
+        const deleteBtn = document.getElementById('deleteSelectedBtn');
+        if (deleteBtn) {
+            if (selectedSchedules.size > 0) {
+                deleteBtn.style.display = 'block';
+                deleteBtn.textContent = `Удалить выбранные (${selectedSchedules.size})`;
+            } else {
+                deleteBtn.style.display = 'none';
+            }
+        }
+    }
+
+    // Массовое удаление выбранных расписаний
+    async function deleteSelectedSchedules() {
+        if (selectedSchedules.size === 0) {
+            alert('Не выбраны расписания для удаления');
+            return;
+        }
+
+        if (!confirm(`Вы уверены, что хотите удалить ${selectedSchedules.size} расписаний?`)) {
+            return;
+        }
+
+        try {
+            const response = await fetch('/schedules/delete-multiple', {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                },
+                body: JSON.stringify({
+                    schedule_ids: Array.from(selectedSchedules)
+                })
+            });
+
+            const data = await handleResponse(response);
+
+            if (data.success) {
+                alert(data.message);
+                // Очищаем выбор и перезагружаем список
+                selectedSchedules.clear();
+                await loadSavedSchedules(); // Ждем завершения загрузки
+            } else {
+                alert(data.message);
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            alert('Ошибка удаления: ' + error.message);
+        }
+    }
+
+    // Удаление одиночного расписания
+    async function deleteSingleSchedule(scheduleId) {
+        if (confirm('Удалить это расписание?')) {
+            try {
+                const response = await fetch(`/schedules/delete/${scheduleId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                    }
+                });
+
+                const data = await handleResponse(response);
+                alert(data.message);
+
+                // Удаляем из выбранных, если было выбрано
+                selectedSchedules.delete(scheduleId);
+                await loadSavedSchedules(); // Ждем завершения загрузки
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Ошибка удаления: ' + error.message);
+            }
+        }
+    }
+
+    // Функция для выбора всех расписаний
+    function selectAllSchedules() {
+        const checkboxes = document.querySelectorAll('.schedules-list input[type="checkbox"]');
+        checkboxes.forEach(checkbox => {
+            const scheduleId = parseInt(checkbox.id.replace('check-', ''));
+            selectedSchedules.add(scheduleId);
+            checkbox.checked = true;
+            document.getElementById(`schedule-${scheduleId}`).classList.add('selected');
+        });
+        updateDeleteButton();
+    }
+
+    // Функция для выбора всех расписаний
+    function selectAllSchedules() {
+        const checkboxes = document.querySelectorAll('.schedules-list input[type="checkbox"]');
+        checkboxes.forEach(checkbox => {
+            const scheduleId = parseInt(checkbox.id.replace('check-', ''));
+            selectedSchedules.add(scheduleId);
+            checkbox.checked = true;
+            const scheduleElement = document.getElementById(`schedule-${scheduleId}`);
+            if (scheduleElement) {
+                scheduleElement.classList.add('selected');
+            }
+        });
+        updateDeleteButton();
+    }
+
+    // Функция для снятия выбора со всех расписаний
+    function deselectAllSchedules() {
+        selectedSchedules.clear();
+        document.querySelectorAll('.schedules-list input[type="checkbox"]').forEach(checkbox => {
+            checkbox.checked = false;
+        });
+        document.querySelectorAll('.saved-item').forEach(item => {
+            item.classList.remove('selected');
+        });
+        updateDeleteButton();
+    }
+
     // Инициализация
     document.addEventListener('DOMContentLoaded', function() {
         updateStats();
     });
+
+
 </script>
 </body>
 </html>

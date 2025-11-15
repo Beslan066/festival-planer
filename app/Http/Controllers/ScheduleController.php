@@ -226,7 +226,18 @@ class ScheduleController extends Controller
         try {
             $schedules = SavedSchedule::where('user_session_id', Session::getId())
                 ->orderBy('created_at', 'desc')
-                ->get();
+                ->get()
+                ->map(function ($schedule) {
+                    return [
+                        'id' => $schedule->id,
+                        'name' => $schedule->name,
+                        'type' => $schedule->type,
+                        'selected_events' => $schedule->selected_events,
+                        'created_at' => $schedule->created_at,
+                        'group_members' => $schedule->group_members,
+                        'total_events' => count($schedule->selected_events ?? [])
+                    ];
+                });
 
             return response()->json($schedules);
         } catch (\Exception $e) {
@@ -415,6 +426,77 @@ class ScheduleController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Ошибка создания группового расписания: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+
+    public function deleteMultiple(Request $request)
+    {
+        try {
+            $scheduleIds = $request->input('schedule_ids', []);
+
+            if (empty($scheduleIds)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Не выбраны расписания для удаления'
+                ]);
+            }
+
+            $deletedCount = SavedSchedule::where('user_session_id', Session::getId())
+                ->whereIn('id', $scheduleIds)
+                ->delete();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Удалено ' . $deletedCount . ' расписаний',
+                'deleted_count' => $deletedCount
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Ошибка удаления: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function getCurrentState()
+    {
+        try {
+            $selectedEvents = Session::get('selected_events', []);
+            $currentSchedule = Session::get('current_schedule', []);
+            $groupSelections = Session::get('group_selections', []);
+
+            return response()->json([
+                'success' => true,
+                'selected_events' => $selectedEvents,
+                'current_schedule' => $currentSchedule,
+                'group_selections' => $groupSelections,
+                'selected_count' => count($selectedEvents)
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Ошибка получения состояния: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function clearCurrent(Request $request)
+    {
+        try {
+            Session::forget('current_schedule');
+            Session::forget('available_schedules');
+            Session::forget('selected_schedule_index');
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Текущее расписание очищено'
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Ошибка очистки: ' . $e->getMessage()
             ], 500);
         }
     }
